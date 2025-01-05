@@ -6,35 +6,30 @@
 // ***CH0*** | ***CH1***
 // **L8*H8** | **L8*H8**
 
-// declared for pingpang buffers;
+// declared pingpang buffers;
 static int8_t input_ping_buffer[HW_INPUT_PORTS * HW_INPUT_CH][PERIOD_SIZE];
 static int8_t input_pang_buffer[HW_INPUT_PORTS * HW_INPUT_CH][PERIOD_SIZE];
 
 static int8_t output_ping_buffer[HW_OUTPUT_PORTS * HW_OUTPUT_CH][PERIOD_SIZE];
 static int8_t output_pang_buffer[HW_OUTPUT_PORTS * HW_OUTPUT_CH][PERIOD_SIZE];
 
-//declared for module buffers;
+//declared module buffers;
 static float module_buffers[MAX_EFFECTS_NUM][PERIOD_FRAME];
 static int module_buffer_num;
 
-//declared input buffer for chain inputs.
+//declared input buffer of chain inputs.
 static float input_pcm_buffers[MAX_INPUT_NUM][PERIOD_FRAME];
 
-//declared for coefficient data buffer
-static float coefficient_buffers[MAX_COEFF_NUM];
-static int coeff_offset;
+//declared coefficient data buffer
+static int8_t coefficient_buffers[MAX_COEFF_NUM];
+static uint32_t coeff_offset;
 
-//declared for runtime coefficient data buffer
-static float rt_coefficient_buffers[MAX_COEFF_NUM];
-static int rt_coeff_offset;
-
-//declared buffer for delay
+//declared buffer of delay/echo effects
 static float delay_buffers[MAX_OUTPUT_NUM][PCM_DELAY_BUFF_SIZE];
 static int delay_num;
 
-// declared for ping pang tick
+// declared ping pang buffer tick
 static bool is_ping_now;
-
 
 /**
  * @brief initialize pcm buffers of dsp framework
@@ -45,8 +40,7 @@ void init_effect_buffers()
 {
     coeff_offset = 0;
     module_buffer_num = 0;
-    coeff_offset = 0;
-    rt_coeff_offset = 0;
+    // rt_coeff_offset = 0;
     delay_num = 0;
 
     is_ping_now = false;
@@ -62,11 +56,10 @@ void init_effect_buffers()
     memset(input_pcm_buffers, 0x0, sizeof(input_pcm_buffers));
 
     memset(coefficient_buffers, 0x0, sizeof(coefficient_buffers));
-    memset(rt_coefficient_buffers, 0x0, sizeof(rt_coefficient_buffers));
 
     memset(delay_buffers, 0x0, sizeof(delay_buffers));
 
-    printf("PERIOD_SIZE=%d, PERIOD_FRAME=%d\n\n", PERIOD_SIZE, PERIOD_FRAME);
+    printf("PERIOD_SIZE=%d, PERIOD_FRAME=%d\n", PERIOD_SIZE, PERIOD_FRAME);
 }
 
 /**
@@ -156,37 +149,18 @@ float* get_available_module_buffer()
  * The coefficient buffer stores the algorithem operations coeff parameters. the size may
  * difference for different modules.
  *
- * @param size indicate the coefficient number will be allocated
- * @return coefficient buffer address
+ * @param size byte size of coefficient buffer that will be allocated
+ * @return void the point address of coefficient buffer
 */
-float* get_available_coefficent(int size)
+void* get_available_coefficent(uint32_t size)
 {
     if (size == 0 || coeff_offset >= MAX_COEFF_NUM)
         return NULL;
 
-    float* buf = &coefficient_buffers[coeff_offset];
+    void* buf = &coefficient_buffers[coeff_offset];
     coeff_offset += size;
     return buf;
 }
-
-/**
- * @brief Get the runt time coefficient buffer from static run time coefficient buffers
- * The run time coefficient buffer stores the algorithem operations runtime parameters.
- * the size may difference for different modules.
- *
- * @param size indicate the runtime coefficient number will be allocated
- * @return runtime coefficient buffer address
-*/
-float* get_available_runtime_coefficent(int size)
-{
-    if (size == 0 || rt_coeff_offset >= MAX_COEFF_NUM)
-        return NULL;
-
-    float* buf = &rt_coefficient_buffers[rt_coeff_offset];
-    rt_coeff_offset += size;
-    return buf;
-}
-
 
 /**
  * @brief Get the input buffer of the chain according to index, it will be connected to
