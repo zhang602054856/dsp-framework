@@ -890,18 +890,6 @@ static inline iir_params_t* get_biquard_coeff_buffer(struct audio_effect_module 
 static int iir_filter_setup(struct audio_effect_module *module,
                             int band, struct band_config *config)
 {
-    // for (int i = 0; i < config->band_num; i++) {
-        // float gain = config->bands[i].gain;
-        // float q_factor = config->bands[i].q_factor;
-        // float center_freq = config->bands[i].center_freq;
-        // BIQUAD_FILTER_TYPE type = config->bands[i].filter_type;
-
-        // iir_params_t *filter[config->band_num];
-        // filter[i] = iir + i * sizeof(iir_params_t);
-
-        // iir_filter_generate_coeffs(type, gain, q_factor, center_freq, filter[i]);
-    // }
-
     iir_params_t *coeff = get_biquard_coeff_buffer(module, band);
 
     iir_filter_generate_coeffs( coeff,
@@ -937,7 +925,6 @@ int iir_modify_gain(struct audio_effect_module *module, float *params, int size)
     float gain = params[1];
 
     iir_params_t *coeff = get_biquard_coeff_buffer(module, band);
-
     iir_filter_generate_coeffs( coeff,
                                 coeff->filter,
                                 gain,

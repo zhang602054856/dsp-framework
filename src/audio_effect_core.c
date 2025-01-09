@@ -117,7 +117,7 @@ audio_effect_module_t* add_module(audio_chain_t *chain, module_config_t *config)
     module->name = config->name;
 
     /* the endpoint type modules are specially, that there is no real effect
-     * process function. thus there is no more procedures.
+     * process function. just setup the slot mapping.
      */
     if (config->type == MODULE_ENDPOINT_INPUT) {
         memcpy(chain->hw_input_map, config->default_conf, MAX_INPUT_NUM);
@@ -156,7 +156,6 @@ audio_effect_module_t* add_module(audio_chain_t *chain, module_config_t *config)
 
     /* get the effect module init function and invoke init. */
     module_init_func_t effect_init = get_module_init(config->type);
-    // module->setup = (module_modify_func_t)config->setup;
     if (effect_init != NULL && config->default_conf != NULL) {
         effect_init(module, config->default_conf);
     }
@@ -256,40 +255,70 @@ static void effect_module_attach(audio_chain_t *chain,
                                                  sink->name, sink_index);
 }
 
-// make link for all effect modules according to pipeline config
-static int inline make_module_connections(audio_chain_t *chain,
+/**
+ * @brief check the module is belongs to input source or pcm generator
+ *
+ * @param type input module type
+ * @return true
+ * @return false
+ */
+static bool inline is_source_module(DSP_MODULE_TYPE type)
+{
+    if (type == MODULE_ENDPOINT_INPUT ||
+        type == MODULE_GENERATOR_TONE ||
+        type == MODULE_GENERATOR_DTMF ||
+        type == MODULE_GENERATOR_WAVPLAYER) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief bind all effect modules according to pipeline config
+ *
+ * @param chain the point of audio_chain_t instance
+ * @param pipelines the point of pipeline_config_t instance
+ * @param pipe_num identify the pipeline number
+ * @return int EFFECT_NO_ERR or EFFECT_PIPELINE_ERR
+ */
+static int inline bind_module_connections(audio_chain_t *chain,
                             pipeline_config_t *pipelines, int pipe_num)
 {
     for (int i = 0; i < pipe_num; i++) {
         module_config_t *source = pipelines[i].source;
         module_config_t *sink = pipelines[i].sink;
 
-        if(source->type == MODULE_ENDPOINT_INPUT ||
-           source->type == MODULE_GENERATOR_TONE ||
-           source->type == MODULE_GENERATOR_DTMF ||
-           source->type == MODULE_GENERATOR_WAVPLAYER) {
-
+        if (true == is_source_module(source->type)) {
             chain->entry_modules[pipelines[i].source_index] = sink;
             chain->entry_num++;
             printf("entry module[%d] = %s\n", pipelines[i].source_index, sink->name);
         }
-        // printf("link modulen | [%s] => %s\n", pipelines[i].source->name, pipelines[i].sink->name);
+        // printf("link module|[%s] => %s\n", pipelines[i].source->name, pipelines[i].sink->name);
         uint8_t src_index = pipelines[i].source_index;
         if (source->output_cnt[src_index] < MAX_COCURRENT_OUTPUT) {
             source->next[src_index][source->output_cnt[src_index]++] = sink;
             sink->last[pipelines[i].sink_index] = source;
         }
         else {
-            printf("%d over the max cocurrent output point of module %s\n",
+            printf("%d over the max cocurrent output of %s\n",
                         source->output_cnt[src_index], source->name);
             return EFFECT_PIPELINE_ERR;
         }
     }
     printf("\n");
-    return 0;
+    return EFFECT_NO_ERR;
 }
 
-static bool is_all_inputs_ordered(module_config_t *module)
+
+
+/**
+ * @brief check all input modules has assigned order or not
+ *
+ * @param module point of module_config_t
+ * @return true, all input modules has ordered
+ * @return false
+ */
+static bool check_all_inputs_has_ordered(module_config_t *module)
 {
     for (int i = 0; i < module->input_ch; i++) {
         module_config_t *prev = module->last[i];
@@ -305,6 +334,14 @@ static bool is_all_inputs_ordered(module_config_t *module)
     return true;
 }
 
+/**
+ * @brief check and allocate order
+ *
+ * @param chain point of audio_chain_t
+ * @param module point of module_config_t
+ * @return int EFFECT_PIPELINE_ERR indicate error occurs, exit dsp-fw procedure
+ *   EFFECT_NO_ERR indicate the order allocate successfully or continue performing.
+ */
 static int check_and_allocate_order(audio_chain_t *chain, module_config_t *module)
 {
     /* for input/output endpoint, should not in the module lists */
@@ -318,13 +355,12 @@ static int check_and_allocate_order(audio_chain_t *chain, module_config_t *modul
      */
     else if (module->type == MODULE_ENDPOINT_OUTPUT) {
         module->order = ORDER_OUTPUT_END_POINT;
-        return 0;
+        return EFFECT_NO_ERR;
     }
-
-    if (is_all_inputs_ordered(module) == false) {
-        /* there are inputs have not assign order yet,
-         * stop and transfer to the next input module */
-        return 0;
+    /* there are inputs have not assign order yet,
+     * stop and transfer to the next input module */
+    if (check_all_inputs_has_ordered(module) == false) {
+        return EFFECT_NO_ERR;
     }
 
     /* assign order to effect module */
@@ -343,7 +379,7 @@ static int check_and_allocate_order(audio_chain_t *chain, module_config_t *modul
         }
     } while (++output_ch < module->output_ch);
 
-    return 0;
+    return EFFECT_NO_ERR;
 }
 
 /**
@@ -352,25 +388,26 @@ static int check_and_allocate_order(audio_chain_t *chain, module_config_t *modul
  * @param chain indicate audio chain
  * @param pipelines indicate pipeline connection configurations
  * @param pipe_num indicate pipeline connection number
+ * @return EFFECT_NO_ERR or EFFECT_PIPELINE_ERR
  */
 void pipeline_connect(audio_chain_t *chain, pipeline_config_t *pipelines, int pipe_num)
 {
-    /* build module_config_t connections according to pipeline config */
-    if (EFFECT_NO_ERR != make_module_connections(chain, pipelines, pipe_num)) {
-        printf("pipeline has issue cause connection abort\n");
+    /* bind module_config_t connections according to pipeline config */
+    if (EFFECT_NO_ERR != bind_module_connections(chain, pipelines, pipe_num)) {
+        printf("Abort order allocation while checking connections\n");
         return;
     }
-    /* assigment the perform order */
+
+    /* assigment the perform order according to previous binded connections */
     for (int i = 0; i < chain->entry_num; i++) {
-        if (check_and_allocate_order(chain, chain->entry_modules[i]) != 0) {
-            printf("order allocate abort\n");
+        if (EFFECT_NO_ERR != check_and_allocate_order(chain, chain->entry_modules[i])) {
+            printf("Abort order allocation due to pipeline config error!!!\n");
             return;
         }
     }
     printf("\n");
-    /* construct the audio_effect_module_t and bind them according
-     * to the pipeline config
-     */
+
+    /* construct the audio_effect_module_t and attach the buffers */
     for(int i = 0; i < pipe_num; i++) {
         audio_effect_module_t *source = add_module(chain, pipelines[i].source);
         audio_effect_module_t *sink   = add_module(chain, pipelines[i].sink);

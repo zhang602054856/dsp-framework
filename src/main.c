@@ -294,21 +294,6 @@ static module_config_t limiter_0 = {
     .default_conf = &limiter_0_default,
 };
 
-static module_config_t wire_0 = {
-    .name = "audio,wire_0",
-    .type = MODULE_EFFECT_WIRE,
-    .input_ch = 1,
-    .output_ch = 2,
-};
-
-static module_config_t wire_1 = {
-    .name = "audio,wire_1",
-    .type = MODULE_EFFECT_WIRE,
-    .input_ch = 1,
-    .output_ch = 2,
-};
-
-
 const uint8_t hw_slots_map_default[] = {
     0, 1,  2,  3,  4,  5,  6,  7,
     8, 9, 10, 11, 12, 13, 14, 15
@@ -385,7 +370,6 @@ static pipeline_config_t pipeline_list[] = {
 
     {   .source = &mixer_0,
         .source_index = 0,
-        // .sink = &wire_0,
         .sink = &equalizer_2,
         .sink_index = 0,
     },
@@ -408,17 +392,11 @@ static pipeline_config_t pipeline_list[] = {
     },
     {   .source = &equalizer_0,
         .source_index = 1,
-        .sink = &wire_1,
-        .sink_index = 0,
-    },
-
-    {   .source = &wire_1,
-        .source_index = 0,
         .sink = &equalizer_4,
         .sink_index = 0,
     },
 
-    {   .source = &wire_1,
+    {   .source = &equalizer_0,
         .source_index = 1,
         .sink = &mixer_1,
         .sink_index = 0,

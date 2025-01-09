@@ -77,6 +77,7 @@ void* get_input_pp_buffer(uint8_t index)
         return (void*)&input_ping_buffer[index][0];
     }
 }
+
 /**
  * @brief copy pcm data (mono) to input pingpang buffer
  *
